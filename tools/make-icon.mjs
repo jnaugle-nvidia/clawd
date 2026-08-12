@@ -1,4 +1,4 @@
-// Generates assets/claude-pet.ico (and a preview PNG) with no dependencies.
+// Generates assets/clawd.ico (and a preview PNG) with no dependencies.
 // Clawd is pixel art, so every size is drawn on an integer unit grid: no antialiasing,
 // no resampling, crisp at 16px and at 256px. PNG is encoded by hand on top of zlib.
 import { deflateSync } from "node:zlib";
@@ -122,6 +122,6 @@ function ico(entries) {
 mkdirSync(OUT, { recursive: true });
 const sizes = [16, 20, 24, 32, 48, 64, 128, 256];
 const entries = sizes.map((size) => ({ size, data: png(size, render(size)) }));
-writeFileSync(join(OUT, "claude-pet.ico"), ico(entries));
-writeFileSync(join(OUT, "claude-pet-256.png"), entries[entries.length - 1].data);
-console.log("wrote claude-pet.ico (" + sizes.join(", ") + ") and claude-pet-256.png");
+writeFileSync(join(OUT, "clawd.ico"), ico(entries));
+writeFileSync(join(OUT, "clawd-256.png"), entries[entries.length - 1].data);
+console.log("wrote clawd.ico (" + sizes.join(", ") + ") and clawd-256.png");

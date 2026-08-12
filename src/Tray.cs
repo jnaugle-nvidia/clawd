@@ -5,13 +5,13 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace ClaudePet
+namespace Clawd
 {
     // Notification-area icon and menu. The icon is drawn at runtime, so there are no image files.
     public class Tray : IDisposable
     {
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        const string RunName = "ClaudePet";
+        const string RunName = "Clawd";
 
         [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
 
@@ -33,7 +33,7 @@ namespace ClaudePet
             menu = new ContextMenuStrip();
             menu.ShowImageMargin = false;
 
-            ToolStripMenuItem title = new ToolStripMenuItem("Claude Pet");
+            ToolStripMenuItem title = new ToolStripMenuItem("Clawd");
             title.Enabled = false;
             menu.Items.Add(title);
             menu.Items.Add(new ToolStripSeparator());
@@ -91,7 +91,7 @@ namespace ClaudePet
 
             icon = new NotifyIcon();
             icon.Icon = BuildIcon(32);
-            icon.Text = "Claude Pet";
+            icon.Text = "Clawd";
             icon.Visible = true;
             icon.ContextMenuStrip = menu;
             icon.MouseDoubleClick += delegate(object s, MouseEventArgs e)

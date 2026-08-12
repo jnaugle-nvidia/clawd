@@ -1,6 +1,6 @@
 import Foundation
 
-// Tiny key=value store under ~/Library/Application Support/ClaudePet/settings.ini.
+// Tiny key=value store under ~/Library/Application Support/Clawd/settings.ini.
 // Same file format as the Windows build, so the two stay readable to each other.
 public final class Settings
 {
@@ -19,7 +19,7 @@ public final class Settings
     {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("ClaudePet", isDirectory: true)
+        return base.appendingPathComponent("Clawd", isDirectory: true)
     }
 
     private static var FilePath: URL { return Dir.appendingPathComponent("settings.ini") }
@@ -58,7 +58,7 @@ public final class Settings
     {
         let lines =
         [
-            "# Claude Pet settings",
+            "# Clawd settings",
             "followcursor=" + (FollowCursor ? "1" : "0"),
             "perch=" + (Perch ? "1" : "0"),
             "chatty=" + (Chatty ? "1" : "0"),

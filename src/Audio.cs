@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace ClaudePet
+namespace Clawd
 {
     // Core Audio: the endpoint's peak meter. This reads a single loudness number per
     // tick from whatever is playing - it never captures or records any audio.

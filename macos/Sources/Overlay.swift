@@ -51,11 +51,11 @@ final class OverlayPanel: NSPanel
 
 public final class Overlay
 {
-    public var Pet: ClaudePet.Pet { return pet }
+    public var Pet: Clawd.Pet { return pet }
     public var MenuRequested: (() -> Void)?
 
     private let cfg: Settings
-    private let pet: ClaudePet.Pet
+    private let pet: Clawd.Pet
     private let visual = PetVisual()
     private let panel: OverlayPanel
 
@@ -80,7 +80,7 @@ public final class Overlay
     public init(_ cfg: Settings, _ watcher: WindowWatcher)
     {
         self.cfg = cfg
-        self.pet = ClaudePet.Pet(cfg, watcher)
+        self.pet = Clawd.Pet(cfg, watcher)
 
         panel = OverlayPanel(
             contentRect: NSRect(x: -4000, y: -4000, width: winW, height: winH),
@@ -223,7 +223,7 @@ public final class Overlay
         panel.setFrameOrigin(Native.AppKitOrigin(x: x, y: y, height: Double(panel.frame.height)))
     }
 
-    // Opt-in diagnostics: create ~/Library/Application Support/ClaudePet/debug.on to get a
+    // Opt-in diagnostics: create ~/Library/Application Support/Clawd/debug.on to get a
     // once-a-second status line in status.txt. Delete it to stop.
     private func DebugDump()
     {

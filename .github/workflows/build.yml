@@ -28,21 +28,21 @@ jobs:
 
       - name: Check the bundle
         run: |
-          binary="bin/ClaudePet.app/Contents/MacOS/ClaudePet"
+          binary="bin/Clawd.app/Contents/MacOS/Clawd"
           test -x "$binary" || { echo "no executable at $binary"; exit 1; }
-          plutil -lint bin/ClaudePet.app/Contents/Info.plist
+          plutil -lint bin/Clawd.app/Contents/Info.plist
           lipo -info "$binary"
-          codesign -dv bin/ClaudePet.app
+          codesign -dv bin/Clawd.app
 
       # upload-artifact zips its input, which drops the executable bit and the code
       # signature. Tar it first so the downloaded .app actually runs.
       - name: Package
-        run: tar -czf ClaudePet-macos.tar.gz -C bin ClaudePet.app
+        run: tar -czf Clawd-macos.tar.gz -C bin Clawd.app
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ClaudePet-macos
-          path: ClaudePet-macos.tar.gz
+          name: Clawd-macos
+          path: Clawd-macos.tar.gz
 
   windows:
     name: Windows (C# / WPF)
@@ -57,10 +57,10 @@ jobs:
       - name: Check the executable
         shell: pwsh
         run: |
-          if (-not (Test-Path bin\ClaudePet.exe)) { throw "bin\ClaudePet.exe was not produced" }
-          Get-Item bin\ClaudePet.exe | Format-List Name, Length, LastWriteTime
+          if (-not (Test-Path bin\Clawd.exe)) { throw "bin\Clawd.exe was not produced" }
+          Get-Item bin\Clawd.exe | Format-List Name, Length, LastWriteTime
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ClaudePet-windows
-          path: bin/ClaudePet.exe
+          name: Clawd-windows
+          path: bin/Clawd.exe

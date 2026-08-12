@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ClaudePet
+namespace Clawd
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

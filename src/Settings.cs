@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
-namespace ClaudePet
+namespace Clawd
 {
-    // Tiny key=value store under %APPDATA%\ClaudePet\settings.ini
+    // Tiny key=value store under %APPDATA%\Clawd\settings.ini
     public class Settings
     {
         public bool FollowCursor;
@@ -34,7 +34,7 @@ namespace ClaudePet
             get
             {
                 return Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ClaudePet");
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clawd");
             }
         }
 
@@ -80,7 +80,7 @@ namespace ClaudePet
             {
                 Directory.CreateDirectory(Dir);
                 List<string> l = new List<string>();
-                l.Add("# Claude Pet settings");
+                l.Add("# Clawd settings");
                 l.Add("followcursor=" + (FollowCursor ? "1" : "0"));
                 l.Add("perch=" + (Perch ? "1" : "0"));
                 l.Add("chatty=" + (Chatty ? "1" : "0"));

@@ -5,7 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 
-namespace ClaudePet
+namespace Clawd
 {
     // The element the pet is painted onto. Draws in physical pixels.
     public class PetVisual : FrameworkElement
@@ -64,7 +64,7 @@ namespace ClaudePet
             ResizeMode = ResizeMode.NoResize;
             SnapsToDevicePixels = true;
             Focusable = false;
-            Title = "ClaudePetOverlay";
+            Title = "ClawdOverlay";
             Left = -4000; Top = -4000;   // off-screen until the first frame places it
 
             visual.Target = pet;
@@ -197,7 +197,7 @@ namespace ClaudePet
                         Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, 0, 0, 0, 0,
                             Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
 
-                    // Opt-in diagnostics: create %APPDATA%\ClaudePet\debug.on to get a
+                    // Opt-in diagnostics: create %APPDATA%\Clawd\debug.on to get a
                     // once-a-second status line in status.txt. Delete it to stop.
                     try
                     {

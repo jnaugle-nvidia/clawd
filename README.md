@@ -1,10 +1,10 @@
-# Claude Pet
+# Clawd
 
 Clawd lives on your desktop. He drifts around the screen, notices when you switch
 apps, flies over and perches on the window you're working in, rides along when you
 drag that window, naps when you go idle, and can be picked up and thrown.
 
-![Clawd](assets/claude-pet-256.png)
+![Clawd](assets/clawd-256.png)
 
 Runs on **Windows** and **macOS**. Either way it's a single small binary with
 **nothing to install** — no runtime, no SDK, no packages. On Windows it compiles against
@@ -16,7 +16,7 @@ against the Swift compiler in the Xcode Command Line Tools.
 **Windows**
 
 ```bash
-bin\ClaudePet.exe
+bin\Clawd.exe
 ```
 
 To start it with Windows, right-click Clawd → **Start with Windows**.
@@ -24,7 +24,7 @@ To start it with Windows, right-click Clawd → **Start with Windows**.
 **macOS**
 
 ```bash
-open bin/ClaudePet.app
+open bin/Clawd.app
 ```
 
 To start it at login, click the menu-bar crab → **Open at login**.
@@ -52,7 +52,7 @@ The macOS build needs the Xcode Command Line Tools. If `swiftc` isn't there yet:
 xcode-select --install
 ```
 
-It produces a universal (Apple silicon + Intel) `bin/ClaudePet.app`, ad-hoc signed.
+It produces a universal (Apple silicon + Intel) `bin/Clawd.app`, ad-hoc signed.
 
 The icon is generated separately (only needed if you change the artwork):
 
@@ -87,8 +87,8 @@ The menu (right-click him, or the tray / menu-bar icon):
 - **Pause** — hide him without quitting
 - **Start with Windows** / **Open at login**, **Quit**
 
-Settings persist in `%APPDATA%\ClaudePet\settings.ini` on Windows and
-`~/Library/Application Support/ClaudePet/settings.ini` on macOS. Same file format.
+Settings persist in `%APPDATA%\Clawd\settings.ini` on Windows and
+`~/Library/Application Support/Clawd/settings.ini` on macOS. Same file format.
 
 ## Dancing
 

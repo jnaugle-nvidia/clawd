@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 
-namespace ClaudePet
+namespace Clawd
 {
     // Clawd: a blocky pixel crab. Everything is built on a unit grid (u) and snapped to
     // whole device pixels so the edges stay hard. Drawn in physical pixels, (0,0) at the
