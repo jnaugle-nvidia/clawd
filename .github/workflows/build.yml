@@ -1,0 +1,66 @@
+name: Build
+
+# Both builds compile against toolchains that ship with their OS, so there is nothing to
+# install on either runner. The point of running both is to catch a break in the platform
+# you are not sitting in front of.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS (Swift / AppKit)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain
+        run: swiftc --version
+
+      - name: Build
+        run: ./macos/build.sh
+
+      - name: Check the bundle
+        run: |
+          binary="bin/ClaudePet.app/Contents/MacOS/ClaudePet"
+          test -x "$binary" || { echo "no executable at $binary"; exit 1; }
+          plutil -lint bin/ClaudePet.app/Contents/Info.plist
+          lipo -info "$binary"
+          codesign -dv bin/ClaudePet.app
+
+      # upload-artifact zips its input, which drops the executable bit and the code
+      # signature. Tar it first so the downloaded .app actually runs.
+      - name: Package
+        run: tar -czf ClaudePet-macos.tar.gz -C bin ClaudePet.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudePet-macos
+          path: ClaudePet-macos.tar.gz
+
+  windows:
+    name: Windows (C# / WPF)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - name: Check the executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path bin\ClaudePet.exe)) { throw "bin\ClaudePet.exe was not produced" }
+          Get-Item bin\ClaudePet.exe | Format-List Name, Length, LastWriteTime
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClaudePet-windows
+          path: bin/ClaudePet.exe
