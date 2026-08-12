@@ -69,6 +69,12 @@ public final class Overlay
     private var lastSig = Int.min
     private var lastPosX = Double.nan, lastPosY = Double.nan
 
+    // Counters for the opt-in debug dump: enough to tell a click that never arrived from
+    // one that arrived and was rejected as being off the crab.
+    private var downCount = 0, missedCount = 0
+    private var lastOver = false
+    private var lastCurX = 0.0, lastCurY = 0.0
+
     private func Now() -> Double { return ProcessInfo.processInfo.systemUptime }
 
     public init(_ cfg: Settings, _ watcher: WindowWatcher)
@@ -96,6 +102,7 @@ public final class Overlay
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
 
         visual.Target = pet
+        visual.autoresizingMask = [.width, .height]
         visual.OnDown = { [weak self] x, y in self?.Down(x, y) }
         visual.OnUp = { [weak self] in self?.Up() }
         visual.OnRight = { [weak self] in self?.MenuRequested?() }
@@ -124,6 +131,13 @@ public final class Overlay
         visual.CX = winW / 2.0
         visual.CY = winH * 0.62
         panel.setContentSize(NSSize(width: winW, height: winH))
+
+        // Pin the view to the new content rect. Changing Size from the menu resizes the
+        // window under a live view, and a view left at the old bounds still draws but
+        // stops hit-testing the part of the window that grew — the crab would go deaf to
+        // clicks everywhere outside his old footprint.
+        visual.frame = NSRect(x: 0, y: 0, width: winW, height: winH)
+
         lastPosX = Double.nan          // force a move at the new size
         lastSig = Int.min              // force a repaint
         visual.needsDisplay = true
@@ -180,6 +194,7 @@ public final class Overlay
         let over = OverPet(c.x, c.y)
         pet.Hovered = over
         panel.ignoresMouseEvents = cfg.ClickThrough || (!over && !dragging)
+        lastOver = over; lastCurX = c.x; lastCurY = c.y
 
         Reposition()
 
@@ -221,6 +236,9 @@ public final class Overlay
             + " beats=\(m.ProvidesBeats)"
             + String(format: " env=%.3f avg=%.3f beatIv=%.2f glitch=%.1f", m.Env, m.Avg, m.BeatInterval, pet.GlitchAmt)
             + " pos=\(Int(pet.X)),\(Int(pet.Y))"
+            + " cur=\(Int(lastCurX)),\(Int(lastCurY))"
+            + " over=\(lastOver) ignore=\(panel.ignoresMouseEvents)"
+            + " downs=\(downCount) missed=\(missedCount) drag=\(dragging)"
         try? line.write(to: dir.appendingPathComponent("status.txt"), atomically: true, encoding: .utf8)
     }
 
@@ -236,7 +254,8 @@ public final class Overlay
 
     private func Down(_ cx: Double, _ cy: Double)
     {
-        if !OverPet(cx, cy) { return }
+        downCount += 1
+        if !OverPet(cx, cy) { missedCount += 1; return }
         dragging = true
         downX = cx; downY = cy
         downTime = Now()
