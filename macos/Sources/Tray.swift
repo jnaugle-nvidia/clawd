@@ -31,7 +31,7 @@ public final class Tray: NSObject, NSMenuDelegate
         menu.autoenablesItems = false
         menu.delegate = self
 
-        let title = NSMenuItem(title: "Claude Pet", action: nil, keyEquivalent: "")
+        let title = NSMenuItem(title: "Clawd", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
         menu.addItem(.separator())
@@ -68,7 +68,7 @@ public final class Tray: NSObject, NSMenuDelegate
         menu.addItem(Add("Quit", #selector(OnQuit)))
 
         item.button?.image = BuildIcon(18)
-        item.button?.toolTip = "Claude Pet"
+        item.button?.toolTip = "Clawd"
         item.menu = menu
     }
 

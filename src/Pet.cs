@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ClaudePet
+namespace Clawd
 {
     public enum PetState { Hover, Approach, Perch, Sleep, Drag, Toss, Dance }
     public enum Mood { Neutral, Happy, Curious, Surprised, Sleepy, Dizzy }

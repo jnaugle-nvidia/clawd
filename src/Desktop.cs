@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
-namespace ClaudePet
+namespace Clawd
 {
     public class DeskWindow
     {

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Windows;
 
-namespace ClaudePet
+namespace Clawd
 {
     public class App
     {
@@ -10,7 +10,7 @@ namespace ClaudePet
         public static void Main()
         {
             bool created;
-            using (Mutex mtx = new Mutex(true, "ClaudePet.SingleInstance.v1", out created))
+            using (Mutex mtx = new Mutex(true, "Clawd.SingleInstance.v1", out created))
             {
                 if (!created) return;   // already running
 
