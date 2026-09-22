@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -21,7 +22,7 @@ namespace Clawd
         readonly ContextMenuStrip menu;
         IntPtr hIcon = IntPtr.Zero;
 
-        ToolStripMenuItem miFollow, miPerch, miChatty, miThrough, miPause, miStartup;
+        ToolStripMenuItem miFollow, miPerch, miPerchOn, miChatty, miThrough, miPause, miStartup;
         ToolStripMenuItem miDance, miGlitch;
         ToolStripMenuItem miSmall, miMedium, miLarge;
 
@@ -53,6 +54,13 @@ namespace Clawd
                 cfg.Perch = !cfg.Perch;
                 cfg.Save();
             });
+
+            // Filled in when it opens, so the list is the windows that are actually there now.
+            miPerchOn = new ToolStripMenuItem("Perch on");
+            miPerchOn.DropDownItems.Add(new ToolStripMenuItem("…"));   // an empty submenu never opens
+            miPerchOn.DropDownOpening += delegate { RebuildPerchMenu(); };
+            menu.Items.Add(miPerchOn);
+
             miDance = Add("Dance to music", delegate
             {
                 cfg.Dance = !cfg.Dance;
@@ -120,6 +128,66 @@ namespace Clawd
             };
             parent.DropDownItems.Add(mi);
             return mi;
+        }
+
+        // ---- "Perch on" window list ----
+
+        void RebuildPerchMenu()
+        {
+            Pet pet = overlay.Pet;
+
+            // The pet's own 0.3s poll is frozen while the menu is tracking, so rescan here or
+            // the list would be whatever was on screen when the menu opened.
+            pet.Watcher.Poll();
+
+            miPerchOn.DropDownItems.Clear();
+
+            IntPtr pinned = pet.PinnedWindow;
+            ToolStripMenuItem any = new ToolStripMenuItem("Any window (roam)");
+            any.Checked = pinned == IntPtr.Zero;
+            any.Click += delegate { pet.Unpin(); };
+            miPerchOn.DropDownItems.Add(any);
+            miPerchOn.DropDownItems.Add(new ToolStripSeparator());
+
+            List<DeskWindow> windows = pet.Watcher.Windows;
+            if (windows.Count == 0)
+            {
+                ToolStripMenuItem none = new ToolStripMenuItem("No windows open");
+                none.Enabled = false;
+                miPerchOn.DropDownItems.Add(none);
+                return;
+            }
+
+            for (int i = 0; i < windows.Count; i++)
+            {
+                DeskWindow w = windows[i];
+                ToolStripMenuItem mi = new ToolStripMenuItem(Label(w));
+                mi.Checked = w.Hwnd == pinned;
+                mi.Tag = w.Hwnd;                    // the handle, not the row: the list can move
+                mi.Click += OnPerchOnWindow;
+                miPerchOn.DropDownItems.Add(mi);
+            }
+        }
+
+        void OnPerchOnWindow(object sender, EventArgs e)
+        {
+            ToolStripMenuItem mi = sender as ToolStripMenuItem;
+            if (mi == null || !(mi.Tag is IntPtr)) return;
+            DeskWindow w = overlay.Pet.Watcher.Find((IntPtr)mi.Tag);
+            if (w == null) return;
+            if (!cfg.Perch) { cfg.Perch = true; cfg.Save(); }   // picking a window implies perching
+            overlay.Pet.PinTo(w);
+        }
+
+        // The full title bar text, so two windows of one app are told apart by the document
+        // they have open.
+        static string Label(DeskWindow w)
+        {
+            string t = (w.Title == null ? "" : w.Title).Trim();
+            if (t.Length == 0) t = w.AppName;
+            if (t.Length == 0) t = "Window";
+            if (t.Length > 54) t = t.Substring(0, 53).TrimEnd() + "…";
+            return t.Replace("&", "&&");     // a lone & is a keyboard mnemonic in a menu
         }
 
         void Refresh()

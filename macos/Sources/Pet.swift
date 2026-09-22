@@ -48,6 +48,10 @@ public final class Pet
     public let Music = MusicMeter()
     public private(set) var Clock = 0.0
 
+    // The window the user picked out of the menu, or 0 when he is free to roam. While this
+    // is set he only ever perches here, and he stays put instead of wandering off again.
+    public private(set) var PinnedWindow: CGWindowID = 0
+
     // ---- internals ----
     private let cfg: Settings
 
@@ -61,6 +65,8 @@ public final class Pet
     private var spinVel = 0.0
     private var perchWindow: CGWindowID = 0
     private var perchFrac = 0.3
+    private var pinRetryT = 0.0      // wait this long before trying the pinned window again
+    private var pinLostT = 0.0       // how long the pinned window has been unreachable
 
     private var forcedDanceT = 0.0, danceCool = 0.0, dancePhase = 0.0, beatTimer = 0.0
     private var beatInterval = 0.5
@@ -72,6 +78,7 @@ public final class Pet
 
     private let SleepAfter = 180.0   // seconds idle before a nap
     private let Gravity = 1600.0
+    private let PinGiveUp = 30.0     // a pinned window gone this long is gone for good
 
     private static let Quips =
     [
@@ -114,8 +121,35 @@ public final class Pet
         wanderT = 5
         dash = 1.6
         perchIdleT = 14
+        pinRetryT = 14                // pinned or not, he was called over: stay a while
         SetMood(.happy, 1.6)
         Emit(0, 6)
+    }
+
+    // Send him to one specific window and keep him there. Replaces any earlier pin.
+    public func PinTo(_ w: DeskWindow)
+    {
+        WakeUp()
+        PinnedWindow = w.Id
+        pinRetryT = 0
+        pinLostT = 0
+        SetMood(.happy, 1.6)
+        Emit(0, 5)
+        // Mid-throw or mid-drag he finishes what he is doing; DoHover picks the pin up after.
+        if State == .drag || State == .toss { return }
+        forcedDanceT = 0
+        danceOnPerch = false
+        GoPerch(w)
+    }
+
+    // Back to roaming. He sits out the rest of this perch, then carries on as before.
+    public func Unpin()
+    {
+        if PinnedWindow == 0 { return }
+        PinnedWindow = 0
+        pinRetryT = 0
+        pinLostT = 0
+        perchTimer = min(perchTimer, 8)
     }
 
     public func PetIt()
@@ -259,6 +293,9 @@ public final class Pet
     {
         Grounded = false
 
+        // Turning perching off entirely drops the pin too; the two would contradict.
+        if !cfg.Perch && PinnedWindow != 0 { Unpin() }
+
         if cfg.FollowCursor && dash <= 0
         {
             orbitA += dt * 0.8
@@ -273,6 +310,21 @@ public final class Pet
             else { Spring(wanderX, wanderY, dt, 9, 5.6) }
         }
 
+        // A pinned pet never picks a window at random: he keeps checking his own one and
+        // goes back the moment it is reachable again.
+        if PinnedWindow != 0
+        {
+            pinLostT += dt
+            pinRetryT -= dt
+            if pinRetryT <= 0 && dash <= 0
+            {
+                pinRetryT = 1.2
+                if Watcher.TryLive(PinnedWindow) != nil { GoPerchId(PinnedWindow) }
+                else if pinLostT > PinGiveUp { Unpin() }   // closed for good: roam again
+            }
+            return
+        }
+
         if cfg.Perch && perchIdleT <= 0 && dash <= 0
         {
             let w = Watcher.PickInteresting()
@@ -284,6 +336,7 @@ public final class Pet
     private func DoApproach(_ dt: Double)
     {
         guard let r = Watcher.TryLive(perchWindow) else { LeavePerch(true); return }
+        if perchWindow == PinnedWindow { pinLostT = 0 }
         let (tx, ty) = PerchPoint(r)
         Spring(tx, ty, dt, 17, 7.4)
         Grounded = false
@@ -298,6 +351,7 @@ public final class Pet
     private func DoPerch(_ dt: Double)
     {
         guard let r = Watcher.TryLive(perchWindow) else { LeavePerch(true); return }
+        if perchWindow == PinnedWindow { pinLostT = 0 }
 
         walkT -= dt
         if walkT <= 0
@@ -311,7 +365,12 @@ public final class Pet
         Grounded = true
 
         perchTimer -= dt
-        if perchTimer <= 0 { LeavePerch(false) }
+        if perchTimer <= 0
+        {
+            // The pinned window is home: he re-ups the timer instead of wandering off.
+            if perchWindow == PinnedWindow { perchTimer = 20 }
+            else { LeavePerch(false) }
+        }
     }
 
     // Sit on the window's top edge; if that would land under the menu bar, sit on the
@@ -327,9 +386,11 @@ public final class Pet
         return (tx, ty)
     }
 
-    private func GoPerch(_ w: DeskWindow)
+    private func GoPerch(_ w: DeskWindow) { GoPerchId(w.Id) }
+
+    private func GoPerchId(_ id: CGWindowID)
     {
-        perchWindow = w.Id
+        perchWindow = id
         perchFrac = 0.1 + Double.random(in: 0 ..< 0.55)
         perchTimer = 16 + Double.random(in: 0 ..< 28)
         State = .approach
@@ -342,6 +403,8 @@ public final class Pet
         Grounded = false
         NewWanderTarget()
         perchIdleT = 10 + Double.random(in: 0 ..< 20)
+        // Knocked off his pinned window: circle for a moment, then go back to it.
+        if PinnedWindow != 0 { pinRetryT = startled ? 3.0 : 1.2 }
         if startled { SetMood(.surprised, 0.8); VY -= 220 }
     }
 
@@ -358,6 +421,11 @@ public final class Pet
     {
         WakeUp()
         danceOnPerch = State == .perch && perchWindow != 0
+        if !danceOnPerch && PinnedWindow != 0 && Watcher.TryLive(PinnedWindow) != nil
+        {
+            perchWindow = PinnedWindow      // pinned: dance on his window, not down on the floor
+            danceOnPerch = true
+        }
         if !danceOnPerch
         {
             let wa = ScreenUtil.WorkArea(X, Y)
@@ -567,6 +635,7 @@ public final class Pet
     private func OnForegroundChanged(_ w: DeskWindow)
     {
         if !cfg.Perch { return }
+        if PinnedWindow != 0 { return }      // the user picked his window: alt-tab doesn't move him
         if State == .drag || State == .toss || State == .dance { return }
         if noticeCool > 0 { return }
         noticeCool = 6
