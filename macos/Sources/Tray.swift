@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import ServiceManagement
 
 // Menu-bar item and menu. The icon is drawn at runtime, so there are no image files.
@@ -11,6 +12,8 @@ public final class Tray: NSObject, NSMenuDelegate
 
     private var miFollow: NSMenuItem!
     private var miPerch: NSMenuItem!
+    private var miPerchOn: NSMenuItem!
+    private let perchMenu = NSMenu()
     private var miDance: NSMenuItem!
     private var miGlitch: NSMenuItem!
     private var miChatty: NSMenuItem!
@@ -48,6 +51,15 @@ public final class Tray: NSObject, NSMenuDelegate
         miChatty = Add("Chatty", #selector(OnChatty))
         miThrough = Add("Click through pet", #selector(OnClickThrough))
         for mi in [miFollow, miPerch, miDance, miGlitch, miChatty, miThrough] { menu.addItem(mi!) }
+
+        // Filled in when it opens, so the list is the windows that are actually there now.
+        miPerchOn = NSMenuItem(title: "Perch on", action: nil, keyEquivalent: "")
+        miPerchOn.isEnabled = true
+        perchMenu.autoenablesItems = false
+        perchMenu.delegate = self
+        perchMenu.addItem(Add("Any window (roam)", #selector(OnPerchAnywhere)))
+        miPerchOn.submenu = perchMenu
+        menu.insertItem(miPerchOn, at: menu.index(of: miPerch) + 1)
 
         let size = NSMenuItem(title: "Size", action: nil, keyEquivalent: "")
         let sizes = NSMenu()
@@ -98,6 +110,15 @@ public final class Tray: NSObject, NSMenuDelegate
         cfg.Save()
     }
 
+    @objc private func OnPerchAnywhere() { overlay.Pet.Unpin() }
+
+    @objc private func OnPerchOnWindow(_ sender: NSMenuItem)
+    {
+        guard let w = overlay.Pet.Watcher.Find(CGWindowID(sender.tag)) else { return }
+        if !cfg.Perch { cfg.Perch = true; cfg.Save() }    // picking a window implies perching
+        overlay.Pet.PinTo(w)
+    }
+
     @objc private func OnSmall() { SetScale(0.72) }
     @objc private func OnMedium() { SetScale(1.0) }
     @objc private func OnLarge() { SetScale(1.45) }
@@ -116,7 +137,68 @@ public final class Tray: NSObject, NSMenuDelegate
 
     // ---- checkmarks ----
 
-    public func menuNeedsUpdate(_ menu: NSMenu) { Refresh() }
+    public func menuNeedsUpdate(_ menu: NSMenu)
+    {
+        if menu === perchMenu { RebuildPerchMenu() } else { Refresh() }
+    }
+
+    // ---- "Perch on" window list ----
+
+    private func RebuildPerchMenu()
+    {
+        // The pet's own 0.3s poll is frozen while a menu is tracking, so rescan here or the
+        // list would be whatever was on screen when the menu opened.
+        overlay.Pet.Watcher.Poll()
+
+        perchMenu.removeAllItems()
+
+        let pinned = overlay.Pet.PinnedWindow
+        let any = Add("Any window (roam)", #selector(OnPerchAnywhere))
+        any.state = pinned == 0 ? .on : .off
+        perchMenu.addItem(any)
+        perchMenu.addItem(.separator())
+
+        let windows = overlay.Pet.Watcher.Windows
+        if windows.isEmpty
+        {
+            let none = NSMenuItem(title: "No windows open", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            perchMenu.addItem(none)
+            return
+        }
+
+        for w in windows
+        {
+            let mi = Add(Tray.Label(w, windows), #selector(OnPerchOnWindow(_:)))
+            mi.tag = Int(w.Id)                      // the id, not the row: the list can move
+            mi.state = w.Id == pinned ? .on : .off
+            perchMenu.addItem(mi)
+        }
+    }
+
+    // Without Screen Recording the window server only hands over the owner's name, so two
+    // windows of one app are told apart by their place in the front-to-back order. With the
+    // permission granted the real title is there and gets used instead.
+    static func Label(_ w: DeskWindow, _ all: [DeskWindow]) -> String
+    {
+        let owner = w.Owner.trimmingCharacters(in: .whitespaces)
+        let name = owner.isEmpty ? "Window" : owner
+        let title = w.Title.trimmingCharacters(in: .whitespaces)
+        if !title.isEmpty { return Trim(name + " — " + title, 54) }
+
+        let same = all.filter { $0.Owner == w.Owner }
+        if same.count > 1, let n = same.firstIndex(where: { $0.Id == w.Id })
+        {
+            return Trim(name, 44) + " (\(n + 1))"
+        }
+        return Trim(name, 54)
+    }
+
+    static func Trim(_ s: String, _ limit: Int) -> String
+    {
+        if s.count <= limit { return s }
+        return String(s.prefix(limit - 1)).trimmingCharacters(in: .whitespaces) + "…"
+    }
 
     private func Refresh()
     {

@@ -78,6 +78,9 @@ The menu (right-click him, or the tray / menu-bar icon):
   synced to real music if any is playing, otherwise to his internal 128 bpm
 - **Follow my cursor** — he orbits your pointer instead of wandering
 - **Perch on windows** — on by default; turn it off and he ignores your windows
+- **Perch on ▸** — the windows open right now. Pick one and he flies over and *stays*
+  there instead of following whatever you switch to. **Any window (roam)** puts him back
+  to normal. See [Picking his window](#picking-his-window)
 - **Dance to music** — on by default; when sound is playing he drops what he's doing
   and dances to it (see below)
 - **Hologram glitch** — off by default; he flickers like a failing hologram
@@ -88,7 +91,41 @@ The menu (right-click him, or the tray / menu-bar icon):
 - **Start with Windows** / **Open at login**, **Quit**
 
 Settings persist in `%APPDATA%\Clawd\settings.ini` on Windows and
-`~/Library/Application Support/Clawd/settings.ini` on macOS. Same file format.
+`~/Library/Application Support/Clawd/settings.ini` on macOS. Same file format. The
+**Perch on** choice is deliberately not saved — window handles don't survive a restart.
+
+## Picking his window
+
+Normally he goes wherever your attention goes. **Perch on ▸** overrides that: the submenu
+lists the windows that are open at the moment you open it, and picking one pins him to
+that window and nothing else.
+
+Pinned, he behaves differently in three ways:
+
+- **Alt-tabbing doesn't move him.** He ignores the foreground window changing.
+- **He doesn't wander off.** The usual "sat here long enough, time to move on" timer
+  keeps resetting.
+- **He comes back.** Startle him, throw him across the screen, or minimise the window and
+  he returns to it as soon as it's on screen again. If it stays gone for 30 seconds — you
+  closed it — he gives up and goes back to roaming.
+
+Everything else still works: he rides along when you move the window, walks up and down
+its top edge, dances on it, sleeps on it, and can be picked up and thrown off it.
+
+**Come here**, dragging him, and **Pause** all still do what they say; he just drifts back
+to his window afterwards.
+
+Picking a window also switches **Perch on windows** back on if it was off, since the two
+would otherwise contradict each other. Turning **Perch on windows** off clears the pin.
+
+Two platform notes on the list itself:
+
+- **Windows** shows each window's real title bar text, so two documents in one editor are
+  easy to tell apart.
+- **macOS** shows the owning app's name. Window *titles* need the Screen Recording
+  permission, which Clawd never asks for, so two windows of the same app are numbered
+  front-to-back instead — `Safari (1)`, `Safari (2)`. Grant Screen Recording to the app if
+  you want the real titles; nothing else about him changes either way.
 
 ## Dancing
 
@@ -132,6 +169,7 @@ in his sleep.
   rides along when you move or resize it, and hops off startled if it closes or minimises.
 - **Follows your attention.** When the foreground window changes he reacts and flies
   over to the new one (rate-limited, so alt-tabbing doesn't send him into a frenzy).
+  Unless you've pinned him to one window — see [Picking his window](#picking-his-window).
 - **Watches the cursor.** His eyes track your pointer wherever it is on screen.
 - **Sleeps.** After 3 minutes with no keyboard or mouse input he settles down, shuts his
   eyes and floats z's. Any input wakes him.

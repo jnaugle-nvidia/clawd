@@ -49,6 +49,10 @@ namespace Clawd
         public double Clock { get { return t; } }
         public MusicMeter Music { get { return music; } }
 
+        // The window the user picked out of the menu, or Zero when he is free to roam. While
+        // this is set he only ever perches here, and stays put instead of wandering off again.
+        public IntPtr PinnedWindow { get { return pinnedHwnd; } }
+
         // ---- internals ----
         readonly Settings cfg;
         readonly WindowWatcher watcher;
@@ -63,6 +67,9 @@ namespace Clawd
         double spinVel;
         IntPtr perchHwnd = IntPtr.Zero;
         double perchFrac = 0.3;
+        IntPtr pinnedHwnd = IntPtr.Zero;
+        double pinRetryT;      // wait this long before trying the pinned window again
+        double pinLostT;       // how long the pinned window has been unreachable
 
         readonly MusicMeter music = new MusicMeter();
         double forcedDanceT, danceCool, dancePhase, beatTimer;
@@ -75,6 +82,7 @@ namespace Clawd
 
         const double SleepAfter = 180.0;   // seconds idle before a nap
         const double Gravity = 1600.0;
+        const double PinGiveUp = 30.0;     // a pinned window gone this long is gone for good
 
         static readonly string[] Quips = new string[]
         {
@@ -116,8 +124,35 @@ namespace Clawd
             wanderT = 5;
             dash = 1.6;
             perchIdleT = 14;
+            pinRetryT = 14;                // pinned or not, he was called over: stay a while
             SetMood(Mood.Happy, 1.6);
             Emit(0, 6);
+        }
+
+        // Send him to one specific window and keep him there. Replaces any earlier pin.
+        public void PinTo(DeskWindow w)
+        {
+            WakeUp();
+            pinnedHwnd = w.Hwnd;
+            pinRetryT = 0;
+            pinLostT = 0;
+            SetMood(Mood.Happy, 1.6);
+            Emit(0, 5);
+            // Mid-throw or mid-drag he finishes what he is doing; DoHover picks the pin up after.
+            if (State == PetState.Drag || State == PetState.Toss) return;
+            forcedDanceT = 0;
+            danceOnPerch = false;
+            GoPerch(w);
+        }
+
+        // Back to roaming. He sits out the rest of this perch, then carries on as before.
+        public void Unpin()
+        {
+            if (pinnedHwnd == IntPtr.Zero) return;
+            pinnedHwnd = IntPtr.Zero;
+            pinRetryT = 0;
+            pinLostT = 0;
+            if (perchTimer > 8) perchTimer = 8;
         }
 
         public void PetIt()
@@ -260,6 +295,9 @@ namespace Clawd
         {
             Grounded = false;
 
+            // Turning perching off entirely drops the pin too; the two would contradict.
+            if (!cfg.Perch && pinnedHwnd != IntPtr.Zero) Unpin();
+
             if (cfg.FollowCursor && dash <= 0)
             {
                 orbitA += dt * 0.8;
@@ -274,6 +312,22 @@ namespace Clawd
                 else Spring(wanderX, wanderY, dt, 9, 5.6);
             }
 
+            // A pinned pet never picks a window at random: he keeps checking his own one and
+            // goes back the moment it is reachable again.
+            if (pinnedHwnd != IntPtr.Zero)
+            {
+                RECT pr;
+                pinLostT += dt;
+                pinRetryT -= dt;
+                if (pinRetryT <= 0 && dash <= 0)
+                {
+                    pinRetryT = 1.2;
+                    if (watcher.TryLive(pinnedHwnd, out pr)) GoPerchHwnd(pinnedHwnd);
+                    else if (pinLostT > PinGiveUp) Unpin();   // closed for good: roam again
+                }
+                return;
+            }
+
             if (cfg.Perch && perchIdleT <= 0 && dash <= 0)
             {
                 DeskWindow w = watcher.PickInteresting(rnd);
@@ -286,6 +340,7 @@ namespace Clawd
         {
             RECT r;
             if (!watcher.TryLive(perchHwnd, out r)) { LeavePerch(true); return; }
+            if (perchHwnd == pinnedHwnd) pinLostT = 0;
             double tx, ty;
             PerchPoint(r, out tx, out ty);
             Spring(tx, ty, dt, 17, 7.4);
@@ -302,6 +357,7 @@ namespace Clawd
         {
             RECT r;
             if (!watcher.TryLive(perchHwnd, out r)) { LeavePerch(true); return; }
+            if (perchHwnd == pinnedHwnd) pinLostT = 0;
 
             walkT -= dt;
             if (walkT <= 0)
@@ -316,7 +372,12 @@ namespace Clawd
             Grounded = true;
 
             perchTimer -= dt;
-            if (perchTimer <= 0) LeavePerch(false);
+            if (perchTimer <= 0)
+            {
+                // The pinned window is home: he re-ups the timer instead of wandering off.
+                if (perchHwnd == pinnedHwnd) perchTimer = 20;
+                else LeavePerch(false);
+            }
         }
 
         // Sit on the window's top edge; on a maximised window sit on the title bar itself.
@@ -330,9 +391,11 @@ namespace Clawd
             if (ty - R * 0.8 < wa.Top) ty = r.Top + R * 0.62;
         }
 
-        void GoPerch(DeskWindow w)
+        void GoPerch(DeskWindow w) { GoPerchHwnd(w.Hwnd); }
+
+        void GoPerchHwnd(IntPtr h)
         {
-            perchHwnd = w.Hwnd;
+            perchHwnd = h;
             perchFrac = 0.1 + rnd.NextDouble() * 0.55;
             perchTimer = 16 + rnd.NextDouble() * 28;
             State = PetState.Approach;
@@ -345,6 +408,8 @@ namespace Clawd
             Grounded = false;
             NewWanderTarget();
             perchIdleT = 10 + rnd.NextDouble() * 20;
+            // Knocked off his pinned window: circle for a moment, then go back to it.
+            if (pinnedHwnd != IntPtr.Zero) pinRetryT = startled ? 3.0 : 1.2;
             if (startled) { SetMood(Mood.Surprised, 0.8); VY -= 220; }
         }
 
@@ -361,6 +426,12 @@ namespace Clawd
         {
             WakeUp();
             danceOnPerch = State == PetState.Perch && perchHwnd != IntPtr.Zero;
+            RECT pinR;
+            if (!danceOnPerch && pinnedHwnd != IntPtr.Zero && watcher.TryLive(pinnedHwnd, out pinR))
+            {
+                perchHwnd = pinnedHwnd;     // pinned: dance on his window, not down on the floor
+                danceOnPerch = true;
+            }
             if (!danceOnPerch)
             {
                 RECT wa = ScreenUtil.WorkArea(X, Y);
@@ -569,6 +640,7 @@ namespace Clawd
         void OnForegroundChanged(DeskWindow w)
         {
             if (!cfg.Perch) return;
+            if (pinnedHwnd != IntPtr.Zero) return;   // the user picked his window: alt-tab doesn't move him
             if (State == PetState.Drag || State == PetState.Toss || State == PetState.Dance) return;
             if (noticeCool > 0) return;
             noticeCool = 6;
