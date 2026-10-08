@@ -44,8 +44,12 @@ public final class Pet
     public var GlitchAmt = 0.0           // 0 or 1: a burst is happening
     public var GlitchSeed = 0            // reroll = the slices jump
 
+    // "Claude needs you", read by the renderer
+    public var NeedsYouScale = 1.0       // 1 normally; throbs bigger and smaller while alerting
+
     public let Watcher: WindowWatcher
     public let Music = MusicMeter()
+    public let Claude = ClaudeWatch()
     public private(set) var Clock = 0.0
 
     // The window the user picked out of the menu, or 0 when he is free to roam. While this
@@ -76,9 +80,13 @@ public final class Pet
 
     private var glitchNextT = 2.5, glitchBurstT = 0.0, glitchSeedT = 0.0
 
+    private var needsYouT = 0.0, needsYouSayT = 0.0
+    private var needsYouWord = ""
+
     private let SleepAfter = 180.0   // seconds idle before a nap
     private let Gravity = 1600.0
     private let PinGiveUp = 30.0     // a pinned window gone this long is gone for good
+    private let NeedsYouFor = 90.0   // an unanswered alert gives up after this long
 
     private static let Quips =
     [
@@ -177,6 +185,7 @@ public final class Pet
     public func BeginDrag(_ cx: Double, _ cy: Double)
     {
         WakeUp()
+        Acknowledge()
         State = .drag
         grabDX = X - cx
         grabDY = Y - cy
@@ -216,6 +225,57 @@ public final class Pet
         if sp > 700 { SetMood(.surprised, 1.0); Emit(3, 1) }
     }
 
+    // ---- Claude needs you ----
+
+    // Claude Code finished, or wants input. He throbs, shouts about it, and keeps at it
+    // until you click him, switch to Ghostty, or NeedsYouFor runs out.
+    public func ClaudeNeedsYou(_ word: String)
+    {
+        WakeUp()
+        needsYouT = NeedsYouFor
+        needsYouSayT = 0
+        needsYouWord = word
+        Emit(3, 1)
+    }
+
+    public func Acknowledge()
+    {
+        if needsYouT <= 0 { return }
+        needsYouT = 0
+        Say = ""; SayT = 0
+        SetMood(.happy, 1.2)
+    }
+
+    public var NeedsYou: Bool { return needsYouT > 0 }
+
+    private func UpdateNeedsYou(_ dt: Double)
+    {
+        // Polled even when the toggle is off, so turning it on doesn't replay an old alert.
+        if let word = Claude.Poll(dt), cfg.ClaudeAlert { ClaudeNeedsYou(word) }
+
+        if needsYouT > 0
+        {
+            needsYouT -= dt
+            // About three throbs a second, between normal size and 30% bigger.
+            NeedsYouScale = 1 + 0.30 * abs(sin(Clock * Double.pi * 3.2))
+            SetMood(.surprised, 0.3)
+
+            needsYouSayT -= dt
+            if needsYouSayT <= 0
+            {
+                needsYouSayT = 6
+                SayText(needsYouWord == "done" ? "claude's done!" : "claude needs you!", 4)
+                Emit(3, 1)
+            }
+            if needsYouT <= 0 { Acknowledge() }
+        }
+        else
+        {
+            NeedsYouScale += (1 - NeedsYouScale) * min(1, dt * 12)
+            if abs(NeedsYouScale - 1) < 0.005 { NeedsYouScale = 1 }
+        }
+    }
+
     // ================= main loop =================
 
     public func Update(_ dtIn: Double)
@@ -240,10 +300,12 @@ public final class Pet
         if cfg.Dance || forcedDanceT > 0 { Music.Poll(dt) }
         let wantDance = (cfg.Dance && Music.MusicActive) || forcedDanceT > 0
 
+        UpdateNeedsYou(dt)
+
         let idle = Native.IdleSeconds()
         if State != .drag && State != .toss
         {
-            if idle > SleepAfter && State != .sleep && !wantDance { EnterSleep() }
+            if idle > SleepAfter && State != .sleep && !wantDance && !NeedsYou { EnterSleep() }
             else if idle < 1.0 && State == .sleep { WakeUp() }
         }
 
@@ -634,6 +696,7 @@ public final class Pet
 
     private func OnForegroundChanged(_ w: DeskWindow)
     {
+        if NeedsYou && w.AppName.lowercased().contains("ghostty") { Acknowledge() }   // you went to answer
         if !cfg.Perch { return }
         if PinnedWindow != 0 { return }      // the user picked his window: alt-tab doesn't move him
         if State == .drag || State == .toss || State == .dance { return }
@@ -823,6 +886,7 @@ public final class Pet
         h = h &* 31 &+ Int((DancePulse * 12).rounded())
         h = h &* 31 &+ (DanceParity ? 1 : 0) &+ DanceMove &* 2
         if GlitchAmt > 0.01 { h = h &* 31 &+ GlitchSeed; h = h &* 31 &+ 1 }
+        h = h &* 31 &+ Int((NeedsYouScale * 60).rounded())
         return h
     }
 

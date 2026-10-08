@@ -16,6 +16,7 @@ public final class Tray: NSObject, NSMenuDelegate
     private let perchMenu = NSMenu()
     private var miDance: NSMenuItem!
     private var miGlitch: NSMenuItem!
+    private var miClaude: NSMenuItem!
     private var miChatty: NSMenuItem!
     private var miThrough: NSMenuItem!
     private var miPause: NSMenuItem!
@@ -48,9 +49,10 @@ public final class Tray: NSObject, NSMenuDelegate
         miPerch = Add("Perch on windows", #selector(OnPerch))
         miDance = Add("Dance to music", #selector(OnDanceToMusic))
         miGlitch = Add("Hologram glitch", #selector(OnGlitch))
+        miClaude = Add("Claude needs you", #selector(OnClaudeAlert))
         miChatty = Add("Chatty", #selector(OnChatty))
         miThrough = Add("Click through pet", #selector(OnClickThrough))
-        for mi in [miFollow, miPerch, miDance, miGlitch, miChatty, miThrough] { menu.addItem(mi!) }
+        for mi in [miFollow, miPerch, miDance, miGlitch, miClaude, miChatty, miThrough] { menu.addItem(mi!) }
 
         // Filled in when it opens, so the list is the windows that are actually there now.
         miPerchOn = NSMenuItem(title: "Perch on", action: nil, keyEquivalent: "")
@@ -101,6 +103,12 @@ public final class Tray: NSObject, NSMenuDelegate
     @objc private func OnPerch() { cfg.Perch = !cfg.Perch; cfg.Save() }
     @objc private func OnDanceToMusic() { cfg.Dance = !cfg.Dance; cfg.Save() }
     @objc private func OnGlitch() { cfg.Glitch = !cfg.Glitch; cfg.Save() }
+    @objc private func OnClaudeAlert()
+    {
+        cfg.ClaudeAlert = !cfg.ClaudeAlert
+        cfg.Save()
+        if !cfg.ClaudeAlert { overlay.Pet.Acknowledge() }
+    }
     @objc private func OnChatty() { cfg.Chatty = !cfg.Chatty; cfg.Save() }
 
     @objc private func OnClickThrough()
@@ -206,6 +214,7 @@ public final class Tray: NSObject, NSMenuDelegate
         miPerch.state = cfg.Perch ? .on : .off
         miDance.state = cfg.Dance ? .on : .off
         miGlitch.state = cfg.Glitch ? .on : .off
+        miClaude.state = cfg.ClaudeAlert ? .on : .off
         miChatty.state = cfg.Chatty ? .on : .off
         miThrough.state = cfg.ClickThrough ? .on : .off
         miPause.state = cfg.Paused ? .on : .off

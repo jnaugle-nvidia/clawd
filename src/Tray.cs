@@ -23,7 +23,7 @@ namespace Clawd
         IntPtr hIcon = IntPtr.Zero;
 
         ToolStripMenuItem miFollow, miPerch, miPerchOn, miChatty, miThrough, miPause, miStartup;
-        ToolStripMenuItem miDance, miGlitch;
+        ToolStripMenuItem miDance, miGlitch, miClaude;
         ToolStripMenuItem miSmall, miMedium, miLarge;
 
         public Tray(Settings cfg, Overlay overlay)
@@ -70,6 +70,12 @@ namespace Clawd
             {
                 cfg.Glitch = !cfg.Glitch;
                 cfg.Save();
+            });
+            miClaude = Add("Claude needs you", delegate
+            {
+                cfg.ClaudeAlert = !cfg.ClaudeAlert;
+                cfg.Save();
+                if (!cfg.ClaudeAlert) overlay.Pet.Acknowledge();
             });
             miChatty = Add("Chatty", delegate
             {
@@ -196,6 +202,7 @@ namespace Clawd
             miPerch.Checked = cfg.Perch;
             miDance.Checked = cfg.Dance;
             miGlitch.Checked = cfg.Glitch;
+            miClaude.Checked = cfg.ClaudeAlert;
             miChatty.Checked = cfg.Chatty;
             miThrough.Checked = cfg.ClickThrough;
             miPause.Checked = cfg.Paused;

@@ -76,7 +76,7 @@ public enum Character
             ctx.rotate(by: CGFloat(q * Double.pi / 180.0))
         }
 
-        // The spawn pop is the one place scaling is allowed; it lasts about half a second.
+        // Scaling is allowed in two places only. The spawn pop lasts about half a second...
         let popping = p.Appear < 0.999
         if popping
         {
@@ -85,11 +85,20 @@ public enum Character
             ctx.scaleBy(x: CGFloat(pop), y: CGFloat(pop))
         }
 
+        // ...and the "Claude needs you" throb, which is meant to be impossible to miss.
+        let throbbing = p.NeedsYouScale != 1
+        if throbbing
+        {
+            ctx.saveGState()
+            ctx.scaleBy(x: CGFloat(p.NeedsYouScale), y: CGFloat(p.NeedsYouScale))
+        }
+
         let parts = BuildParts(p, u)
 
         if p.GlitchAmt > 0.01 { DrawGlitched(ctx, p, u, parts) }
         else { DrawCrab(ctx, p, u, parts) }
 
+        if throbbing { ctx.restoreGState() }
         if popping { ctx.restoreGState() }
         if rot { ctx.restoreGState() }
         ctx.restoreGState()

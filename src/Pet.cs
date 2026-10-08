@@ -45,9 +45,13 @@ namespace Clawd
         public double GlitchAmt;         // 0 or 1: a burst is happening
         public int GlitchSeed;           // reroll = the slices jump
 
+        // "Claude needs you", read by the renderer
+        public double NeedsYouScale = 1; // 1 normally; throbs bigger and smaller while alerting
+
         public WindowWatcher Watcher { get { return watcher; } }
         public double Clock { get { return t; } }
         public MusicMeter Music { get { return music; } }
+        public bool NeedsYou { get { return needsYouT > 0; } }
 
         // The window the user picked out of the menu, or Zero when he is free to roam. While
         // this is set he only ever perches here, and stays put instead of wandering off again.
@@ -80,9 +84,14 @@ namespace Clawd
 
         double glitchNextT = 2.5, glitchBurstT, glitchSeedT;
 
+        readonly ClaudeWatch claude = new ClaudeWatch();
+        double needsYouT, needsYouSayT;
+        string needsYouWord = "";
+
         const double SleepAfter = 180.0;   // seconds idle before a nap
         const double Gravity = 1600.0;
         const double PinGiveUp = 30.0;     // a pinned window gone this long is gone for good
+        const double NeedsYouFor = 90.0;   // an unanswered alert gives up after this long
 
         static readonly string[] Quips = new string[]
         {
@@ -178,6 +187,7 @@ namespace Clawd
         public void BeginDrag(double cx, double cy)
         {
             WakeUp();
+            Acknowledge();
             State = PetState.Drag;
             grabDX = X - cx;
             grabDY = Y - cy;
@@ -217,6 +227,56 @@ namespace Clawd
             if (sp > 700) { SetMood(Mood.Surprised, 1.0); Emit(3, 1); }
         }
 
+        // ---- Claude needs you ----
+
+        // Claude Code finished, or wants input. He throbs, shouts about it, and keeps at it
+        // until you click him, switch to Ghostty, or NeedsYouFor runs out.
+        public void ClaudeNeedsYou(string word)
+        {
+            WakeUp();
+            needsYouT = NeedsYouFor;
+            needsYouSayT = 0;
+            needsYouWord = word;
+            Emit(3, 1);
+        }
+
+        public void Acknowledge()
+        {
+            if (needsYouT <= 0) return;
+            needsYouT = 0;
+            Say = ""; SayT = 0;
+            SetMood(Mood.Happy, 1.2);
+        }
+
+        void UpdateNeedsYou(double dt)
+        {
+            // Polled even when the toggle is off, so turning it on doesn't replay an old alert.
+            string word = claude.Poll(dt);
+            if (word != null && cfg.ClaudeAlert) ClaudeNeedsYou(word);
+
+            if (needsYouT > 0)
+            {
+                needsYouT -= dt;
+                // About three throbs a second, between normal size and 30% bigger.
+                NeedsYouScale = 1 + 0.30 * Math.Abs(Math.Sin(t * Math.PI * 3.2));
+                SetMood(Mood.Surprised, 0.3);
+
+                needsYouSayT -= dt;
+                if (needsYouSayT <= 0)
+                {
+                    needsYouSayT = 6;
+                    SayText(needsYouWord == "done" ? "claude's done!" : "claude needs you!", 4);
+                    Emit(3, 1);
+                }
+                if (needsYouT <= 0) Acknowledge();
+            }
+            else
+            {
+                NeedsYouScale += (1 - NeedsYouScale) * Math.Min(1, dt * 12);
+                if (Math.Abs(NeedsYouScale - 1) < 0.005) NeedsYouScale = 1;
+            }
+        }
+
         // ================= main loop =================
 
         public void Update(double dt)
@@ -241,10 +301,12 @@ namespace Clawd
             if (cfg.Dance || forcedDanceT > 0) music.Poll(dt);
             bool wantDance = (cfg.Dance && music.MusicActive) || forcedDanceT > 0;
 
+            UpdateNeedsYou(dt);
+
             double idle = Native.IdleSeconds();
             if (State != PetState.Drag && State != PetState.Toss)
             {
-                if (idle > SleepAfter && State != PetState.Sleep && !wantDance) EnterSleep();
+                if (idle > SleepAfter && State != PetState.Sleep && !wantDance && !NeedsYou) EnterSleep();
                 else if (idle < 1.0 && State == PetState.Sleep) WakeUp();
             }
 
@@ -639,6 +701,7 @@ namespace Clawd
 
         void OnForegroundChanged(DeskWindow w)
         {
+            if (NeedsYou && w.AppName.ToLowerInvariant().Contains("ghostty")) Acknowledge();   // you went to answer
             if (!cfg.Perch) return;
             if (pinnedHwnd != IntPtr.Zero) return;   // the user picked his window: alt-tab doesn't move him
             if (State == PetState.Drag || State == PetState.Toss || State == PetState.Dance) return;
@@ -818,6 +881,7 @@ namespace Clawd
                 h = h * 31 + (int)Math.Round(DancePulse * 12);
                 h = h * 31 + (DanceParity ? 1 : 0) + DanceMove * 2;
                 if (GlitchAmt > 0.01) { h = h * 31 + GlitchSeed; h = h * 31 + 1; }
+                h = h * 31 + (int)Math.Round(NeedsYouScale * 60);
                 return h;
             }
         }

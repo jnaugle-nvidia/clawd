@@ -90,7 +90,7 @@ namespace Clawd
             bool rot = q > 0.5 || q < -0.5;
             if (rot) dc.PushTransform(new RotateTransform(q));
 
-            // The spawn pop is the one place scaling is allowed; it lasts about half a second.
+            // Scaling is allowed in two places only. The spawn pop lasts about half a second...
             bool popping = p.Appear < 0.999;
             if (popping)
             {
@@ -98,11 +98,16 @@ namespace Clawd
                 dc.PushTransform(new ScaleTransform(pop, pop));
             }
 
+            // ...and the "Claude needs you" throb, which is meant to be impossible to miss.
+            bool throbbing = p.NeedsYouScale != 1;
+            if (throbbing) dc.PushTransform(new ScaleTransform(p.NeedsYouScale, p.NeedsYouScale));
+
             List<Rect> parts = BuildParts(p, u);
 
             if (p.GlitchAmt > 0.01) DrawGlitched(dc, p, u, parts);
             else DrawCrab(dc, p, u, parts);
 
+            if (throbbing) dc.Pop();
             if (popping) dc.Pop();
             if (rot) dc.Pop();
             dc.Pop();

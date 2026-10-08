@@ -84,6 +84,8 @@ The menu (right-click him, or the tray / menu-bar icon):
 - **Dance to music** — on by default; when sound is playing he drops what he's doing
   and dances to it (see below)
 - **Hologram glitch** — off by default; he flickers like a failing hologram
+- **Claude needs you** — on by default; he throbs when Claude Code finishes or wants
+  input (see [Claude needs you](#claude-needs-you))
 - **Chatty** — the occasional short remark
 - **Click through pet** — he stops intercepting clicks entirely; purely decorative
 - **Size** — Small / Medium / Large
@@ -161,6 +163,35 @@ cyan and red ghost copies split off, the sprite slices into bands that jump side
 odd bands drop out entirely, and a scanline shimmer runs over the body. Then the signal
 recovers. It combines with everything else — he can glitch mid-dance, mid-perch, or
 in his sleep.
+
+## Claude needs you
+
+When Claude Code finishes a turn or is waiting on you, he wakes up, grows and shrinks
+about three times a second, and says **claude's done!** or **claude needs you!** He keeps
+going until you click him, switch to Ghostty, or 90 seconds pass.
+
+He doesn't read Ghostty's notifications; that would need a permission. Instead, Claude
+Code's own hooks write one word into a file he watches:
+
+| | File |
+| --- | --- |
+| macOS | `~/Library/Application Support/Clawd/claude-needs-you` |
+| Windows | `%APPDATA%\Clawd\claude-needs-you` |
+
+To hook it up, add this to `~/.claude/settings.json` (macOS shown; on Windows use
+`$APPDATA/Clawd` in place of `$HOME/Library/Application Support/Clawd`):
+
+```json
+"hooks": {
+  "Stop": [{ "hooks": [{ "type": "command",
+    "command": "mkdir -p \"$HOME/Library/Application Support/Clawd\" && echo done > \"$HOME/Library/Application Support/Clawd/claude-needs-you\" 2>/dev/null || true" }] }],
+  "Notification": [{ "hooks": [{ "type": "command",
+    "command": "mkdir -p \"$HOME/Library/Application Support/Clawd\" && echo input > \"$HOME/Library/Application Support/Clawd/claude-needs-you\" 2>/dev/null || true" }] }]
+}
+```
+
+`Stop` fires when Claude finishes; `Notification` fires when Claude needs a permission
+answer or has been waiting on you. Anything written before Clawd started is ignored.
 
 ## What he does on his own
 
