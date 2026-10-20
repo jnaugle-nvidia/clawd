@@ -12,6 +12,7 @@ public final class Settings
     public var Dance = true
     public var Glitch = false
     public var ClaudeAlert = true
+    public var ClaudeActivity = true
     public var Scale = 1.0
 
     public init() { }
@@ -48,6 +49,7 @@ public final class Settings
             case "dance":        s.Dance = (v == "1")
             case "glitch":       s.Glitch = (v == "1")
             case "claudealert":  s.ClaudeAlert = (v == "1")
+            case "claudeactivity": s.ClaudeActivity = (v == "1")
             case "scale":
                 if let d = Double(v), d > 0.3 && d < 4.0 { s.Scale = d }
             default: break
@@ -68,6 +70,7 @@ public final class Settings
             "dance=" + (Dance ? "1" : "0"),
             "glitch=" + (Glitch ? "1" : "0"),
             "claudealert=" + (ClaudeAlert ? "1" : "0"),
+            "claudeactivity=" + (ClaudeActivity ? "1" : "0"),
             "scale=" + String(format: "%g", Scale)
         ]
         try? FileManager.default.createDirectory(at: Settings.Dir, withIntermediateDirectories: true)

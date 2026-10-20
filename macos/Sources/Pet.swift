@@ -82,6 +82,8 @@ public final class Pet
 
     private var needsYouT = 0.0, needsYouSayT = 0.0
     private var needsYouWord = ""
+    private var busyT = 0.0, workSparkT = 0.0   // Claude Code is working; how long that lasts
+    private var activityText = ""
 
     private let SleepAfter = 180.0   // seconds idle before a nap
     private let Gravity = 1600.0
@@ -247,11 +249,117 @@ public final class Pet
     }
 
     public var NeedsYou: Bool { return needsYouT > 0 }
+    public var ClaudeBusy: Bool { return busyT > 0 }
 
-    private func UpdateNeedsYou(_ dt: Double)
+    // ---- what Claude is doing ----
+
+    private func OnClaudeEvent(_ e: ClaudeEvent)
     {
-        // Polled even when the toggle is off, so turning it on doesn't replay an old alert.
-        if let word = Claude.Poll(dt), cfg.ClaudeAlert { ClaudeNeedsYou(word) }
+        switch e.Event
+        {
+        case "Stop":
+            EndActivity()
+            if cfg.ClaudeAlert { ClaudeNeedsYou("done") }
+            return
+        case "Notification":
+            if cfg.ClaudeAlert { ClaudeNeedsYou("input") }
+            return
+        case "SessionEnd":
+            EndActivity()
+            return
+        default:
+            break
+        }
+
+        // Asking you something is the same as needing you.
+        if e.Event == "PreToolUse" && (e.Tool == "AskUserQuestion" || e.Tool == "ExitPlanMode")
+        {
+            if cfg.ClaudeAlert { ClaudeNeedsYou("input") }
+            return
+        }
+
+        Acknowledge()          // Claude is moving again, so you must have answered
+        busyT = 45
+        guard cfg.ClaudeActivity, let (text, mood) = Pet.Describe(e) else { return }
+        WakeUp()
+        activityText = text
+        SayText(text, 4)
+        SetMood(mood, 1.5)
+        if e.Event == "PostToolUseFailure" { Emit(3, 1) }
+    }
+
+    private func EndActivity()
+    {
+        busyT = 0
+        if !activityText.isEmpty && Say == activityText { Say = ""; SayT = 0 }
+        activityText = ""
+    }
+
+    // A short line for the speech bubble, and the face to go with it.
+    static func Describe(_ e: ClaudeEvent) -> (String, Mood)?
+    {
+        let d = Short(e.Detail, 26)
+        switch e.Event
+        {
+        case "UserPromptSubmit": return ("thinking…", .curious)
+        case "PreCompact": return ("tidying my memory…", .dizzy)
+        case "PostToolUseFailure": return ("oops, " + Pet.ToolName(e.Tool) + " failed", .surprised)
+        case "PreToolUse": break
+        default: return nil
+        }
+        let with: (String) -> String = { verb in d.isEmpty ? verb : verb + " " + d }
+        switch e.Tool
+        {
+        case "Read": return (with("reading"), .curious)
+        case "Edit", "MultiEdit", "Write", "NotebookEdit": return (with("editing"), .happy)
+        case "Bash", "PowerShell":
+            return (e.Detail.lowercased().contains("test") ? with("testing:") : with("running"), .curious)
+        case "Grep", "Glob": return (with("searching"), .curious)
+        case "WebSearch": return ("searching the web", .curious)
+        case "WebFetch": return (with("reading"), .curious)
+        case "Task", "Agent": return ("sending a helper", .happy)
+        case "TodoWrite", "TaskCreate", "TaskUpdate": return ("updating the plan", .neutral)
+        default: return ("using " + Pet.ToolName(e.Tool), .curious)
+        }
+    }
+
+    // "mcp__claude_ai_Slack__send" reads as "Slack"; everything else as itself.
+    static func ToolName(_ t: String) -> String
+    {
+        if t.hasPrefix("mcp__")
+        {
+            let parts = t.components(separatedBy: "__")
+            if parts.count > 1
+            {
+                return parts[1].replacingOccurrences(of: "claude_ai_", with: "").replacingOccurrences(of: "_", with: " ")
+            }
+        }
+        return t.isEmpty ? "a tool" : t
+    }
+
+    private static func Short(_ s: String, _ n: Int) -> String
+    {
+        let t = s.split(whereSeparator: { $0 == " " || $0 == "\n" }).joined(separator: " ")
+        return t.count <= n ? t : String(t.prefix(n - 1)) + "…"
+    }
+
+    private func UpdateClaude(_ dt: Double)
+    {
+        // Polled even when the toggles are off, so turning one on doesn't replay an old event.
+        if let e = Claude.Poll(dt) { OnClaudeEvent(e) }
+
+        if busyT > 0
+        {
+            busyT -= dt
+            if busyT <= 0 { EndActivity() }
+            else if cfg.ClaudeActivity && needsYouT <= 0 && State != .drag && State != .toss
+            {
+                // Keep the bubble up for as long as he's working, with a spark now and then.
+                if SayT <= 0 && !activityText.isEmpty { SayText(activityText, 4) }
+                workSparkT -= dt
+                if workSparkT <= 0 { workSparkT = 1.3; Emit(0, 1) }
+            }
+        }
 
         if needsYouT > 0
         {
@@ -300,12 +408,13 @@ public final class Pet
         if cfg.Dance || forcedDanceT > 0 { Music.Poll(dt) }
         let wantDance = (cfg.Dance && Music.MusicActive) || forcedDanceT > 0
 
-        UpdateNeedsYou(dt)
+        UpdateClaude(dt)
 
         let idle = Native.IdleSeconds()
         if State != .drag && State != .toss
         {
-            if idle > SleepAfter && State != .sleep && !wantDance && !NeedsYou { EnterSleep() }
+            // You go quiet while Claude works; he stays up and keeps you posted.
+            if idle > SleepAfter && State != .sleep && !wantDance && !NeedsYou && !ClaudeBusy { EnterSleep() }
             else if idle < 1.0 && State == .sleep { WakeUp() }
         }
 
@@ -344,7 +453,7 @@ public final class Pet
             if quipT <= 0
             {
                 quipT = 240 + Double.random(in: 0 ..< 320)
-                if State == .hover || State == .perch { Speak() }
+                if (State == .hover || State == .perch) && !ClaudeBusy && !NeedsYou { Speak() }
             }
         }
     }

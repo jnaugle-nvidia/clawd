@@ -15,7 +15,7 @@ if not exist "%~dp0bin" mkdir "%~dp0bin"
   /out:"%~dp0bin\Clawd.exe" ^
   /win32icon:"%~dp0assets\clawd.ico" ^
   /r:System.dll /r:System.Core.dll /r:System.Xaml.dll ^
-  /r:System.Drawing.dll /r:System.Windows.Forms.dll ^
+  /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll ^
   /r:"%WPF%\PresentationCore.dll" /r:"%WPF%\PresentationFramework.dll" /r:"%WPF%\WindowsBase.dll" ^
   "%~dp0src\*.cs"
 

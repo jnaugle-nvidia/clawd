@@ -9,6 +9,10 @@ namespace Clawd
         [STAThread]
         public static void Main()
         {
+            // Claude Code runs this same exe as its hook: record the event and leave at once,
+            // before any window, mutex or tray icon exists.
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), "--hook") > 0) { ClaudeWatch.RunHook(); return; }
+
             bool created;
             using (Mutex mtx = new Mutex(true, "Clawd.SingleInstance.v1", out created))
             {

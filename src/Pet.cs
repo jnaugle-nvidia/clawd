@@ -52,6 +52,7 @@ namespace Clawd
         public double Clock { get { return t; } }
         public MusicMeter Music { get { return music; } }
         public bool NeedsYou { get { return needsYouT > 0; } }
+        public bool ClaudeBusy { get { return busyT > 0; } }
 
         // The window the user picked out of the menu, or Zero when he is free to roam. While
         // this is set he only ever perches here, and stays put instead of wandering off again.
@@ -87,6 +88,8 @@ namespace Clawd
         readonly ClaudeWatch claude = new ClaudeWatch();
         double needsYouT, needsYouSayT;
         string needsYouWord = "";
+        double busyT, workSparkT;      // Claude Code is working; how long that lasts
+        string activityText = "";
 
         const double SleepAfter = 180.0;   // seconds idle before a nap
         const double Gravity = 1600.0;
@@ -248,11 +251,115 @@ namespace Clawd
             SetMood(Mood.Happy, 1.2);
         }
 
-        void UpdateNeedsYou(double dt)
+        // ---- what Claude is doing ----
+
+        void OnClaudeEvent(ClaudeEvent e)
         {
-            // Polled even when the toggle is off, so turning it on doesn't replay an old alert.
-            string word = claude.Poll(dt);
-            if (word != null && cfg.ClaudeAlert) ClaudeNeedsYou(word);
+            switch (e.Event)
+            {
+                case "Stop":
+                    EndActivity();
+                    if (cfg.ClaudeAlert) ClaudeNeedsYou("done");
+                    return;
+                case "Notification":
+                    if (cfg.ClaudeAlert) ClaudeNeedsYou("input");
+                    return;
+                case "SessionEnd":
+                    EndActivity();
+                    return;
+            }
+
+            // Asking you something is the same as needing you.
+            if (e.Event == "PreToolUse" && (e.Tool == "AskUserQuestion" || e.Tool == "ExitPlanMode"))
+            {
+                if (cfg.ClaudeAlert) ClaudeNeedsYou("input");
+                return;
+            }
+
+            Acknowledge();          // Claude is moving again, so you must have answered
+            busyT = 45;
+            if (!cfg.ClaudeActivity) return;
+            string text; Mood mood;
+            if (!Describe(e, out text, out mood)) return;
+            WakeUp();
+            activityText = text;
+            SayText(text, 4);
+            SetMood(mood, 1.5);
+            if (e.Event == "PostToolUseFailure") Emit(3, 1);
+        }
+
+        void EndActivity()
+        {
+            busyT = 0;
+            if (activityText.Length > 0 && Say == activityText) { Say = ""; SayT = 0; }
+            activityText = "";
+        }
+
+        // A short line for the speech bubble, and the face to go with it.
+        static bool Describe(ClaudeEvent e, out string text, out Mood mood)
+        {
+            string d = Short(e.Detail, 26);
+            text = ""; mood = Mood.Curious;
+            switch (e.Event)
+            {
+                case "UserPromptSubmit": text = "thinking…"; return true;
+                case "PreCompact": text = "tidying my memory…"; mood = Mood.Dizzy; return true;
+                case "PostToolUseFailure": text = "oops, " + ToolName(e.Tool) + " failed"; mood = Mood.Surprised; return true;
+                case "PreToolUse": break;
+                default: return false;
+            }
+            switch (e.Tool)
+            {
+                case "Read": case "WebFetch": text = With("reading", d); break;
+                case "Edit": case "MultiEdit": case "Write": case "NotebookEdit": text = With("editing", d); mood = Mood.Happy; break;
+                case "Bash": case "PowerShell":
+                    text = With(e.Detail.ToLowerInvariant().Contains("test") ? "testing:" : "running", d); break;
+                case "Grep": case "Glob": text = With("searching", d); break;
+                case "WebSearch": text = "searching the web"; break;
+                case "Task": case "Agent": text = "sending a helper"; mood = Mood.Happy; break;
+                case "TodoWrite": case "TaskCreate": case "TaskUpdate": text = "updating the plan"; mood = Mood.Neutral; break;
+                default: text = "using " + ToolName(e.Tool); break;
+            }
+            return true;
+        }
+
+        static string With(string verb, string d) { return d.Length == 0 ? verb : verb + " " + d; }
+
+        // "mcp__claude_ai_Slack__send" reads as "Slack"; everything else as itself.
+        static string ToolName(string t)
+        {
+            if (t.StartsWith("mcp__"))
+            {
+                string[] parts = t.Split(new[] { "__" }, StringSplitOptions.None);
+                if (parts.Length > 1) return parts[1].Replace("claude_ai_", "").Replace('_', ' ');
+            }
+            return t.Length == 0 ? "a tool" : t;
+        }
+
+        static string Short(string s, int n)
+        {
+            string t = string.Join(" ", s.Split(new[] { ' ', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            return t.Length <= n ? t : t.Substring(0, n - 1) + "…";
+        }
+
+        void UpdateClaude(double dt)
+        {
+            // Polled even when the toggles are off, so turning one on doesn't replay an old event.
+            ClaudeEvent ev = claude.Poll(dt);
+            if (ev != null) OnClaudeEvent(ev);
+
+            if (busyT > 0)
+            {
+                busyT -= dt;
+                if (busyT <= 0) EndActivity();
+                else if (cfg.ClaudeActivity && needsYouT <= 0 && State != PetState.Drag && State != PetState.Toss)
+                {
+                    // Keep the bubble up for as long as he's working, with a spark now and then.
+                    if (SayT <= 0 && activityText.Length > 0) SayText(activityText, 4);
+                    workSparkT -= dt;
+                    if (workSparkT <= 0) { workSparkT = 1.3; Emit(0, 1); }
+                }
+            }
 
             if (needsYouT > 0)
             {
@@ -301,12 +408,13 @@ namespace Clawd
             if (cfg.Dance || forcedDanceT > 0) music.Poll(dt);
             bool wantDance = (cfg.Dance && music.MusicActive) || forcedDanceT > 0;
 
-            UpdateNeedsYou(dt);
+            UpdateClaude(dt);
 
             double idle = Native.IdleSeconds();
             if (State != PetState.Drag && State != PetState.Toss)
             {
-                if (idle > SleepAfter && State != PetState.Sleep && !wantDance && !NeedsYou) EnterSleep();
+                // You go quiet while Claude works; he stays up and keeps you posted.
+                if (idle > SleepAfter && State != PetState.Sleep && !wantDance && !NeedsYou && !ClaudeBusy) EnterSleep();
                 else if (idle < 1.0 && State == PetState.Sleep) WakeUp();
             }
 
@@ -346,7 +454,7 @@ namespace Clawd
                 if (quipT <= 0)
                 {
                     quipT = 240 + rnd.NextDouble() * 320;
-                    if (State == PetState.Hover || State == PetState.Perch) Speak();
+                    if ((State == PetState.Hover || State == PetState.Perch) && !ClaudeBusy && !NeedsYou) Speak();
                 }
             }
         }

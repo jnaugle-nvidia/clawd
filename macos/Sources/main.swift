@@ -50,6 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate
     }
 }
 
+// Claude Code runs this same binary as its hook: record the event and leave at once,
+// before any window, lock or menu-bar icon exists.
+if CommandLine.arguments.contains("--hook") { ClaudeWatch.RunHook(); exit(0) }
+
 if !TakeSingleInstanceLock() { exit(0) }            // already running
 
 let app = NSApplication.shared

@@ -17,6 +17,10 @@ public final class Tray: NSObject, NSMenuDelegate
     private var miDance: NSMenuItem!
     private var miGlitch: NSMenuItem!
     private var miClaude: NSMenuItem!
+    private var miActivity: NSMenuItem!
+    private var miClaudeStatus: NSMenuItem!
+    private var miConnect: NSMenuItem!
+    private var miDisconnect: NSMenuItem!
     private var miChatty: NSMenuItem!
     private var miThrough: NSMenuItem!
     private var miPause: NSMenuItem!
@@ -49,10 +53,9 @@ public final class Tray: NSObject, NSMenuDelegate
         miPerch = Add("Perch on windows", #selector(OnPerch))
         miDance = Add("Dance to music", #selector(OnDanceToMusic))
         miGlitch = Add("Hologram glitch", #selector(OnGlitch))
-        miClaude = Add("Claude needs you", #selector(OnClaudeAlert))
         miChatty = Add("Chatty", #selector(OnChatty))
         miThrough = Add("Click through pet", #selector(OnClickThrough))
-        for mi in [miFollow, miPerch, miDance, miGlitch, miClaude, miChatty, miThrough] { menu.addItem(mi!) }
+        for mi in [miFollow, miPerch, miDance, miGlitch, miChatty, miThrough] { menu.addItem(mi!) }
 
         // Filled in when it opens, so the list is the windows that are actually there now.
         miPerchOn = NSMenuItem(title: "Perch on", action: nil, keyEquivalent: "")
@@ -62,6 +65,23 @@ public final class Tray: NSObject, NSMenuDelegate
         perchMenu.addItem(Add("Any window (roam)", #selector(OnPerchAnywhere)))
         miPerchOn.submenu = perchMenu
         menu.insertItem(miPerchOn, at: menu.index(of: miPerch) + 1)
+
+        // Claude Code: hook it up, and choose what he does about it.
+        let claude = NSMenuItem(title: "Claude Code", action: nil, keyEquivalent: "")
+        let claudeMenu = NSMenu()
+        claudeMenu.autoenablesItems = false
+        miClaudeStatus = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        miClaudeStatus.isEnabled = false
+        miConnect = Add("Connect", #selector(OnConnect))
+        miDisconnect = Add("Disconnect", #selector(OnDisconnect))
+        miActivity = Add("Show what Claude is doing", #selector(OnActivity))
+        miClaude = Add("Alert when Claude needs you", #selector(OnClaudeAlert))
+        for mi in [miClaudeStatus, miConnect, miDisconnect] { claudeMenu.addItem(mi!) }
+        claudeMenu.addItem(.separator())
+        claudeMenu.addItem(miActivity)
+        claudeMenu.addItem(miClaude)
+        claude.submenu = claudeMenu
+        menu.addItem(claude)
 
         let size = NSMenuItem(title: "Size", action: nil, keyEquivalent: "")
         let sizes = NSMenu()
@@ -109,6 +129,31 @@ public final class Tray: NSObject, NSMenuDelegate
         cfg.Save()
         if !cfg.ClaudeAlert { overlay.Pet.Acknowledge() }
     }
+    @objc private func OnActivity() { cfg.ClaudeActivity = !cfg.ClaudeActivity; cfg.Save() }
+
+    @objc private func OnConnect()
+    {
+        if let err = ClaudeHooks.Connect() { ShowError(err); return }
+        overlay.Pet.SayText("hooked up to claude!", 3.5)
+        overlay.Pet.SetMood(.happy, 2)
+        overlay.Pet.Emit(1, 4)
+    }
+
+    @objc private func OnDisconnect()
+    {
+        if let err = ClaudeHooks.Disconnect() { ShowError(err); return }
+        overlay.Pet.SayText("unhooked from claude", 3)
+    }
+
+    private func ShowError(_ text: String)
+    {
+        let a = NSAlert()
+        a.messageText = "Clawd couldn't change your Claude Code settings"
+        a.informativeText = text
+        NSApp.activate(ignoringOtherApps: true)
+        a.runModal()
+    }
+
     @objc private func OnChatty() { cfg.Chatty = !cfg.Chatty; cfg.Save() }
 
     @objc private func OnClickThrough()
@@ -215,6 +260,22 @@ public final class Tray: NSObject, NSMenuDelegate
         miDance.state = cfg.Dance ? .on : .off
         miGlitch.state = cfg.Glitch ? .on : .off
         miClaude.state = cfg.ClaudeAlert ? .on : .off
+        miActivity.state = cfg.ClaudeActivity ? .on : .off
+        switch ClaudeHooks.CurrentStatus()
+        {
+        case .connected:
+            miClaudeStatus.title = "Connected"
+            miConnect.title = "Reconnect"
+            miDisconnect.isEnabled = true
+        case .outdated:
+            miClaudeStatus.title = "Connected to an old copy of Clawd"
+            miConnect.title = "Repair connection"
+            miDisconnect.isEnabled = true
+        case .notConnected:
+            miClaudeStatus.title = "Not connected"
+            miConnect.title = "Connect"
+            miDisconnect.isEnabled = false
+        }
         miChatty.state = cfg.Chatty ? .on : .off
         miThrough.state = cfg.ClickThrough ? .on : .off
         miPause.state = cfg.Paused ? .on : .off

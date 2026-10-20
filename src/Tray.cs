@@ -23,7 +23,8 @@ namespace Clawd
         IntPtr hIcon = IntPtr.Zero;
 
         ToolStripMenuItem miFollow, miPerch, miPerchOn, miChatty, miThrough, miPause, miStartup;
-        ToolStripMenuItem miDance, miGlitch, miClaude;
+        ToolStripMenuItem miDance, miGlitch, miClaude, miActivity;
+        ToolStripMenuItem miClaudeStatus, miConnect, miDisconnect;
         ToolStripMenuItem miSmall, miMedium, miLarge;
 
         public Tray(Settings cfg, Overlay overlay)
@@ -71,12 +72,6 @@ namespace Clawd
                 cfg.Glitch = !cfg.Glitch;
                 cfg.Save();
             });
-            miClaude = Add("Claude needs you", delegate
-            {
-                cfg.ClaudeAlert = !cfg.ClaudeAlert;
-                cfg.Save();
-                if (!cfg.ClaudeAlert) overlay.Pet.Acknowledge();
-            });
             miChatty = Add("Chatty", delegate
             {
                 cfg.Chatty = !cfg.Chatty;
@@ -88,6 +83,47 @@ namespace Clawd
                 overlay.ApplyClickThrough();
                 cfg.Save();
             });
+
+            // Claude Code: hook it up, and choose what he does about it.
+            ToolStripMenuItem claude = new ToolStripMenuItem("Claude Code");
+            miClaudeStatus = new ToolStripMenuItem("");
+            miClaudeStatus.Enabled = false;
+            miConnect = new ToolStripMenuItem("Connect");
+            miConnect.Click += delegate
+            {
+                string err = ClaudeHooks.Connect();
+                if (err != null) { ShowError(err); return; }
+                overlay.Pet.SayText("hooked up to claude!", 3.5);
+                overlay.Pet.SetMood(Mood.Happy, 2);
+                overlay.Pet.Emit(1, 4);
+            };
+            miDisconnect = new ToolStripMenuItem("Disconnect");
+            miDisconnect.Click += delegate
+            {
+                string err = ClaudeHooks.Disconnect();
+                if (err != null) { ShowError(err); return; }
+                overlay.Pet.SayText("unhooked from claude", 3);
+            };
+            miActivity = new ToolStripMenuItem("Show what Claude is doing");
+            miActivity.Click += delegate
+            {
+                cfg.ClaudeActivity = !cfg.ClaudeActivity;
+                cfg.Save();
+            };
+            miClaude = new ToolStripMenuItem("Alert when Claude needs you");
+            miClaude.Click += delegate
+            {
+                cfg.ClaudeAlert = !cfg.ClaudeAlert;
+                cfg.Save();
+                if (!cfg.ClaudeAlert) overlay.Pet.Acknowledge();
+            };
+            claude.DropDownItems.Add(miClaudeStatus);
+            claude.DropDownItems.Add(miConnect);
+            claude.DropDownItems.Add(miDisconnect);
+            claude.DropDownItems.Add(new ToolStripSeparator());
+            claude.DropDownItems.Add(miActivity);
+            claude.DropDownItems.Add(miClaude);
+            menu.Items.Add(claude);
 
             ToolStripMenuItem size = new ToolStripMenuItem("Size");
             miSmall = SizeItem(size, "Small", 0.72);
@@ -112,6 +148,12 @@ namespace Clawd
             {
                 if (e.Button == MouseButtons.Left) overlay.Pet.ComeHere();
             };
+        }
+
+        static void ShowError(string text)
+        {
+            System.Windows.Forms.MessageBox.Show(text, "Clawd couldn't change your Claude Code settings",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         ToolStripMenuItem Add(string text, EventHandler onClick)
@@ -203,6 +245,25 @@ namespace Clawd
             miDance.Checked = cfg.Dance;
             miGlitch.Checked = cfg.Glitch;
             miClaude.Checked = cfg.ClaudeAlert;
+            miActivity.Checked = cfg.ClaudeActivity;
+            switch (ClaudeHooks.CurrentStatus())
+            {
+                case ClaudeHookStatus.Connected:
+                    miClaudeStatus.Text = "Connected";
+                    miConnect.Text = "Reconnect";
+                    miDisconnect.Enabled = true;
+                    break;
+                case ClaudeHookStatus.Outdated:
+                    miClaudeStatus.Text = "Connected to an old copy of Clawd";
+                    miConnect.Text = "Repair connection";
+                    miDisconnect.Enabled = true;
+                    break;
+                default:
+                    miClaudeStatus.Text = "Not connected";
+                    miConnect.Text = "Connect";
+                    miDisconnect.Enabled = false;
+                    break;
+            }
             miChatty.Checked = cfg.Chatty;
             miThrough.Checked = cfg.ClickThrough;
             miPause.Checked = cfg.Paused;

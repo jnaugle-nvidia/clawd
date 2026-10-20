@@ -16,6 +16,7 @@ namespace Clawd
         public bool Dance;
         public bool Glitch;
         public bool ClaudeAlert;
+        public bool ClaudeActivity;
         public double Scale;
 
         public Settings()
@@ -28,6 +29,7 @@ namespace Clawd
             Dance = true;
             Glitch = false;
             ClaudeAlert = true;
+            ClaudeActivity = true;
             Scale = 1.0;
         }
 
@@ -64,6 +66,7 @@ namespace Clawd
                         case "dance": s.Dance = (v == "1"); break;
                         case "glitch": s.Glitch = (v == "1"); break;
                         case "claudealert": s.ClaudeAlert = (v == "1"); break;
+                        case "claudeactivity": s.ClaudeActivity = (v == "1"); break;
                         case "scale":
                             double d;
                             if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out d)
@@ -91,6 +94,7 @@ namespace Clawd
                 l.Add("dance=" + (Dance ? "1" : "0"));
                 l.Add("glitch=" + (Glitch ? "1" : "0"));
                 l.Add("claudealert=" + (ClaudeAlert ? "1" : "0"));
+                l.Add("claudeactivity=" + (ClaudeActivity ? "1" : "0"));
                 l.Add("scale=" + Scale.ToString("0.##", CultureInfo.InvariantCulture));
                 File.WriteAllLines(FilePath, l.ToArray());
             }
