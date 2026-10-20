@@ -60,7 +60,7 @@ public final class Pet
     private let cfg: Settings
 
     private var pollT = 0.0, moodT = 0.0, blinkT = 0.0, blinkPhase = 0.0
-    private var wanderT = 0.0, walkT = 0.0, perchTimer = 0.0, perchIdleT = 0.0
+    private var wanderT = 0.0, walkT = 0.0, perchIdleT = 0.0
     private var zT = 0.0, quipT = 0.0, noticeCool = 0.0, startleCool = 0.0
     private var dash = 0.0, settleT = 0.0, tossT = 0.0, orbitA = 0.0
     private var wanderX = 0.0, wanderY = 0.0, sleepX = 0.0, sleepY = 0.0
@@ -125,6 +125,7 @@ public final class Pet
         danceCool = 4                 // called mid-dance: sit this one out
         danceOnPerch = false
         State = .hover
+        perchWindow = 0               // calling him over is one way to get him off a perch
         let c = Native.CursorPos()
         wanderX = c.x
         wanderY = c.y - R * 1.5
@@ -152,14 +153,13 @@ public final class Pet
         GoPerch(w)
     }
 
-    // Back to roaming. He sits out the rest of this perch, then carries on as before.
+    // Back to roaming. He stays on the window he is on until he's released, then carries on.
     public func Unpin()
     {
         if PinnedWindow == 0 { return }
         PinnedWindow = 0
         pinRetryT = 0
         pinLostT = 0
-        perchTimer = min(perchTimer, 8)
     }
 
     public func PetIt()
@@ -168,7 +168,6 @@ public final class Pet
         SetMood(.happy, 2.2)
         Emit(1, 5)
         VY -= 380
-        if State == .perch { perchTimer = max(perchTimer, 8) }
     }
 
     public func Speak()
@@ -213,11 +212,13 @@ public final class Pet
         if State != .drag { return }
         if wasClick
         {
-            State = .hover
-            NewWanderTarget()
+            // A click is a pat, not a release: a perched pet hops straight back on.
+            if Watcher.TryLive(perchWindow) != nil { State = .approach }
+            else { perchWindow = 0; State = .hover; NewWanderTarget() }
             PetIt()
             return
         }
+        perchWindow = 0               // dragged off and thrown: released
         State = .toss
         VX = Pet.Clamp(dragVX, -2600, 2600)
         VY = Pet.Clamp(dragVY, -2600, 2600)
@@ -534,14 +535,7 @@ public final class Pet
         let (tx, ty) = PerchPoint(r)
         Spring(tx, ty, dt, 44, 11)
         Grounded = true
-
-        perchTimer -= dt
-        if perchTimer <= 0
-        {
-            // The pinned window is home: he re-ups the timer instead of wandering off.
-            if perchWindow == PinnedWindow { perchTimer = 20 }
-            else { LeavePerch(false) }
-        }
+        // No timer: he stays until he's dragged off, called over, or the window goes away.
     }
 
     // Sit on the window's top edge; if that would land under the menu bar, sit on the
@@ -563,7 +557,6 @@ public final class Pet
     {
         perchWindow = id
         perchFrac = 0.1 + Double.random(in: 0 ..< 0.55)
-        perchTimer = 16 + Double.random(in: 0 ..< 28)
         State = .approach
     }
 
@@ -619,10 +612,10 @@ public final class Pet
         {
             State = .perch
             walkT = 2
-            if perchTimer < 8 { perchTimer = 8 }
         }
         else
         {
+            perchWindow = 0
             State = .hover
             NewWanderTarget()
         }
@@ -742,8 +735,9 @@ public final class Pet
     private func WakeUp()
     {
         if State != .sleep { return }
-        State = .hover
-        NewWanderTarget()
+        // Dozed off on a window: wake up still on it.
+        if Watcher.TryLive(perchWindow) != nil { State = .approach }
+        else { perchWindow = 0; State = .hover; NewWanderTarget() }
         SetMood(.surprised, 0.9)
         Emit(0, 5)
         perchIdleT = 4
@@ -799,8 +793,8 @@ public final class Pet
         let len = max(1, (dx * dx + dy * dy).squareRoot())
         VX += dx / len * 620
         VY += dy / len * 620 - 180
-        if State == .perch { LeavePerch(true) }
-        else if State == .dance { danceCool = 3; danceOnPerch = false; LeaveDance() }
+        // A perched pet flinches but holds on; only a drag gets him off.
+        if State == .dance { danceCool = 3; danceOnPerch = false; LeaveDance() }
     }
 
     private func OnForegroundChanged(_ w: DeskWindow)
@@ -808,6 +802,7 @@ public final class Pet
         if NeedsYou && w.AppName.lowercased().contains("ghostty") { Acknowledge() }   // you went to answer
         if !cfg.Perch { return }
         if PinnedWindow != 0 { return }      // the user picked his window: alt-tab doesn't move him
+        if perchWindow != 0 { return }       // already perched: he stays until released
         if State == .drag || State == .toss || State == .dance { return }
         if noticeCool > 0 { return }
         noticeCool = 6

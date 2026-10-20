@@ -98,15 +98,14 @@ Settings persist in `%APPDATA%\Clawd\settings.ini` on Windows and
 
 ## Picking his window
 
-Normally he goes wherever your attention goes. **Perch on ▸** overrides that: the submenu
+Normally he perches on the window you're working in and stays there until he's released
+(see [What he does on his own](#what-he-does-on-his-own)). **Perch on ▸** overrides that: the submenu
 lists the windows that are open at the moment you open it, and picking one pins him to
 that window and nothing else.
 
-Pinned, he behaves differently in three ways:
+Pinned, he behaves differently in two ways:
 
-- **Alt-tabbing doesn't move him.** He ignores the foreground window changing.
-- **He doesn't wander off.** The usual "sat here long enough, time to move on" timer
-  keeps resetting.
+- **Alt-tabbing doesn't move him,** even while he's flying around between perches.
 - **He comes back.** Startle him, throw him across the screen, or minimise the window and
   he returns to it as soon as it's on screen again. If it stays gone for 30 seconds — you
   closed it — he gives up and goes back to roaming.
@@ -199,8 +198,11 @@ file. No server, no network, no permissions, nothing to install.
 - **Perches.** Sits on a window's top edge and walks along it. On a maximised window
   he sits on the title bar. He re-reads the window's real bounds every frame, so he
   rides along when you move or resize it, and hops off startled if it closes or minimises.
-- **Follows your attention.** When the foreground window changes he reacts and flies
-  over to the new one (rate-limited, so alt-tabbing doesn't send him into a frenzy).
+- **Stays until released.** Once perched he stays put: switching apps, clicking him, a
+  quick swipe of the cursor and dozing off don't move him. Drag him off, use **Come here**,
+  or close the window to set him free.
+- **Follows your attention.** While he isn't perched, a change of foreground window sends
+  him over to the new one (rate-limited, so alt-tabbing doesn't send him into a frenzy).
   Unless you've pinned him to one window — see [Picking his window](#picking-his-window).
 - **Watches the cursor.** His eyes track your pointer wherever it is on screen.
 - **Sleeps.** After 3 minutes with no keyboard or mouse input he settles down, shuts his

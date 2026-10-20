@@ -64,7 +64,7 @@ namespace Clawd
         readonly Random rnd = new Random();
 
         double t;
-        double pollT, moodT, blinkT, blinkPhase, wanderT, walkT, perchTimer, perchIdleT;
+        double pollT, moodT, blinkT, blinkPhase, wanderT, walkT, perchIdleT;
         double zT, quipT, noticeCool, startleCool, dash, settleT, tossT, orbitA;
         double wanderX, wanderY, sleepX, sleepY;
         double grabDX, grabDY, dragVX, dragVY;
@@ -130,6 +130,7 @@ namespace Clawd
             danceCool = 4;                 // called mid-dance: sit this one out
             danceOnPerch = false;
             State = PetState.Hover;
+            perchHwnd = IntPtr.Zero;       // calling him over is one way to get him off a perch
             POINT c; Native.GetCursorPos(out c);
             wanderX = c.X;
             wanderY = c.Y - R * 1.5;
@@ -157,14 +158,13 @@ namespace Clawd
             GoPerch(w);
         }
 
-        // Back to roaming. He sits out the rest of this perch, then carries on as before.
+        // Back to roaming. He stays on the window he is on until he's released, then carries on.
         public void Unpin()
         {
             if (pinnedHwnd == IntPtr.Zero) return;
             pinnedHwnd = IntPtr.Zero;
             pinRetryT = 0;
             pinLostT = 0;
-            if (perchTimer > 8) perchTimer = 8;
         }
 
         public void PetIt()
@@ -173,7 +173,6 @@ namespace Clawd
             SetMood(Mood.Happy, 2.2);
             Emit(1, 5);
             VY -= 380;
-            if (State == PetState.Perch) perchTimer = Math.Max(perchTimer, 8);
         }
 
         public void Speak()
@@ -216,11 +215,14 @@ namespace Clawd
             if (State != PetState.Drag) return;
             if (wasClick)
             {
-                State = PetState.Hover;
-                NewWanderTarget();
+                // A click is a pat, not a release: a perched pet hops straight back on.
+                RECT r;
+                if (watcher.TryLive(perchHwnd, out r)) State = PetState.Approach;
+                else { perchHwnd = IntPtr.Zero; State = PetState.Hover; NewWanderTarget(); }
                 PetIt();
                 return;
             }
+            perchHwnd = IntPtr.Zero;       // dragged off and thrown: released
             State = PetState.Toss;
             VX = Clamp(dragVX, -2600, 2600);
             VY = Clamp(dragVY, -2600, 2600);
@@ -540,14 +542,7 @@ namespace Clawd
             PerchPoint(r, out tx, out ty);
             Spring(tx, ty, dt, 44, 11);
             Grounded = true;
-
-            perchTimer -= dt;
-            if (perchTimer <= 0)
-            {
-                // The pinned window is home: he re-ups the timer instead of wandering off.
-                if (perchHwnd == pinnedHwnd) perchTimer = 20;
-                else LeavePerch(false);
-            }
+            // No timer: he stays until he's dragged off, called over, or the window goes away.
         }
 
         // Sit on the window's top edge; on a maximised window sit on the title bar itself.
@@ -567,7 +562,6 @@ namespace Clawd
         {
             perchHwnd = h;
             perchFrac = 0.1 + rnd.NextDouble() * 0.55;
-            perchTimer = 16 + rnd.NextDouble() * 28;
             State = PetState.Approach;
         }
 
@@ -625,10 +619,10 @@ namespace Clawd
             {
                 State = PetState.Perch;
                 walkT = 2;
-                if (perchTimer < 8) perchTimer = 8;
             }
             else
             {
+                perchHwnd = IntPtr.Zero;
                 State = PetState.Hover;
                 NewWanderTarget();
             }
@@ -747,8 +741,10 @@ namespace Clawd
         void WakeUp()
         {
             if (State != PetState.Sleep) return;
-            State = PetState.Hover;
-            NewWanderTarget();
+            // Dozed off on a window: wake up still on it.
+            RECT r;
+            if (watcher.TryLive(perchHwnd, out r)) State = PetState.Approach;
+            else { perchHwnd = IntPtr.Zero; State = PetState.Hover; NewWanderTarget(); }
             SetMood(Mood.Surprised, 0.9);
             Emit(0, 5);
             perchIdleT = 4;
@@ -803,8 +799,8 @@ namespace Clawd
             double dx = X - cx, dy = Y - cy, len = Math.Max(1, Math.Sqrt(dx * dx + dy * dy));
             VX += dx / len * 620;
             VY += dy / len * 620 - 180;
-            if (State == PetState.Perch) LeavePerch(true);
-            else if (State == PetState.Dance) { danceCool = 3; danceOnPerch = false; LeaveDance(); }
+            // A perched pet flinches but holds on; only a drag gets him off.
+            if (State == PetState.Dance) { danceCool = 3; danceOnPerch = false; LeaveDance(); }
         }
 
         void OnForegroundChanged(DeskWindow w)
@@ -812,6 +808,7 @@ namespace Clawd
             if (NeedsYou && w.AppName.ToLowerInvariant().Contains("ghostty")) Acknowledge();   // you went to answer
             if (!cfg.Perch) return;
             if (pinnedHwnd != IntPtr.Zero) return;   // the user picked his window: alt-tab doesn't move him
+            if (perchHwnd != IntPtr.Zero) return;    // already perched: he stays until released
             if (State == PetState.Drag || State == PetState.Toss || State == PetState.Dance) return;
             if (noticeCool > 0) return;
             noticeCool = 6;
